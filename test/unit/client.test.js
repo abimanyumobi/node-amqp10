@@ -8,7 +8,6 @@ var _ = require('lodash'),
     AMQPClient = require('../../lib').Client,
     MockServer = require('./mocks').Server,
 
-    Session = require('../../lib/session'),
     errors = require('../../lib/errors'),
     constants = require('../../lib/constants'),
     frames = require('../../lib/frames'),
@@ -83,6 +82,11 @@ describe('Client', function() {
       test.server.setResponseSequence([
         constants.amqpVersion,
         new frames.OpenFrame(test.client.policy.connect.options),
+        new frames.BeginFrame({
+          remoteChannel: 1, nextOutgoingId: 0,
+          incomingWindow: 2147483647, outgoingWindow: 2147483647,
+          handleMax: 4294967295
+        }),
         new frames.CloseFrame({
           error: { condition: ErrorCondition.ConnectionForced, description: 'test' }
         })
@@ -296,13 +300,18 @@ describe('Client', function() {
       test.server.setResponseSequence([
         constants.amqpVersion,
         new frames.OpenFrame({ containerId: 'server' }),
+        new frames.BeginFrame({
+          remoteChannel: 1, nextOutgoingId: 0,
+          incomingWindow: 2147483647, outgoingWindow: 2147483647,
+          handleMax: 4294967295
+        }),
         new frames.CloseFrame({
           error: { condition: ErrorCondition.ConnectionForced, description: 'test' }
         })
       ]);
 
       return test.client.connect(test.server.address())
-        .then(function () {
+        .then(function() {
           expect(test.client._connection.remote.open.idleTimeout).to.equal(constants.defaultIdleTimeout);
           return test.client.disconnect();
         });
@@ -312,6 +321,11 @@ describe('Client', function() {
       test.server.setResponseSequence([
         constants.amqpVersion,
         new frames.OpenFrame({ containerId: 'server', idleTimeout: 57 }),
+        new frames.BeginFrame({
+          remoteChannel: 1, nextOutgoingId: 0,
+          incomingWindow: 2147483647, outgoingWindow: 2147483647,
+          handleMax: 4294967295
+        }),
         new frames.CloseFrame({
           error: { condition: ErrorCondition.ConnectionForced, description: 'test' }
         })
@@ -329,6 +343,11 @@ describe('Client', function() {
       test.server.setResponseSequence([
         constants.amqpVersion,
         new frames.OpenFrame({ containerId: 'server', idleTimeout: 0 }),
+        new frames.BeginFrame({
+          remoteChannel: 1, nextOutgoingId: 0,
+          incomingWindow: 2147483647, outgoingWindow: 2147483647,
+          handleMax: 4294967295
+        }),
         new frames.CloseFrame({
           error: { condition: ErrorCondition.ConnectionForced, description: 'test' }
         })
@@ -346,6 +365,11 @@ describe('Client', function() {
       test.server.setResponseSequence([
         constants.amqpVersion,
         new frames.OpenFrame({ containerId: 'server', idleTimeout: 0 }),
+        new frames.BeginFrame({
+          remoteChannel: 1, nextOutgoingId: 0,
+          incomingWindow: 2147483647, outgoingWindow: 2147483647,
+          handleMax: 4294967295
+        }),
         new frames.CloseFrame({
           error: { condition: ErrorCondition.ConnectionForced, description: 'test' }
         })
@@ -493,7 +517,6 @@ describe('Client', function() {
 
       return test.server.teardown()
         .then(function() { return test.client.connect(address); })
-        .then(function() { return test.client.createSession(); })
         .then(function() { return test.client.disconnect(); });
     });
 
@@ -502,10 +525,20 @@ describe('Client', function() {
         // first connect
         constants.amqpVersion,
         new frames.OpenFrame(test.client.policy.connect.options),
+        new frames.BeginFrame({
+          remoteChannel: 1, nextOutgoingId: 0,
+          incomingWindow: 2147483647, outgoingWindow: 2147483647,
+          handleMax: 4294967295
+        }),
 
         // second connect
         constants.amqpVersion,
         new frames.OpenFrame(test.client.policy.connect.options),
+        new frames.BeginFrame({
+          remoteChannel: 1, nextOutgoingId: 0,
+          incomingWindow: 2147483647, outgoingWindow: 2147483647,
+          handleMax: 4294967295
+        }),
         new frames.CloseFrame({
           error: { condition: ErrorCondition.ConnectionForced, description: 'test' }
         })
@@ -523,52 +556,7 @@ describe('Client', function() {
         .delay(250) // simulate some time to reconnect
         .then(function() { return test.client.disconnect(); });
     });
-  });
 
-  describe('#createSession()', function() {
-    beforeEach(function() {
-      if (!!test.server) test.server = undefined;
-      if (!!test.client) test.client = undefined;
-      test.client = new AMQPClient(TestPolicy);
-      test.server = new MockServer();
-      return test.server.setup();
-    });
-
-    afterEach(function() {
-      if (!test.server) return;
-      return test.server.teardown()
-        .then(function() {
-          test.server = undefined;
-        });
-    });
-
-    it('should create a new session', function() {
-      test.server.setResponseSequence([
-        constants.amqpVersion,
-        new frames.OpenFrame(test.client.policy.connect.options),
-        new frames.BeginFrame({
-          remoteChannel: 1, nextOutgoingId: 0,
-          incomingWindow: 2147483647, outgoingWindow: 2147483647,
-          handleMax: 4294967295
-        }),
-        new frames.CloseFrame({
-          error: { condition: ErrorCondition.ConnectionForced, description: 'test' }
-        })
-      ]);
-
-      return test.client.connect(test.server.address())
-        .then(function() { return test.client.createSession(); })
-        .then(function(session) {
-          expect(session.mapped).to.be.true;
-          return test.client.disconnect();
-        });
-    });
-    
-    it('should fail if the client hasn\'t been connected yet', function() {
-      expect(function() {
-        return test.client.createSession();
-      }).to.throw();
-    });
   });
 
   describe('#reattach', function() {
@@ -642,128 +630,6 @@ describe('Client', function() {
         .then(function() {
           expect(receiver.state()).to.eql('detached');
         });
-    });
-  });
-
-  describe('#reconnect', function() {
-    beforeEach(function() {
-      if (!!test.server) test.server = undefined;
-      if (!!test.client) test.client = undefined;
-      test.client = new AMQPClient(TestPolicy, {
-        reconnect: { retries: 5, forever: true }
-      });
-
-      test.server = new MockServer();
-      return test.server.setup();
-    });
-
-    afterEach(function() {
-      if (!test.server) return;
-      return test.server.teardown()
-        .then(function() {
-          test.server = undefined;
-        });
-    });
-
-    it('should wait for all existing sessions to be mapped before completing', function(done) {
-      test.server.setResponseSequence([
-        constants.amqpVersion,
-        new frames.OpenFrame(test.client.policy.connect.options),
-        new frames.BeginFrame({
-          remoteChannel: 1, nextOutgoingId: 0,
-          incomingWindow: 2147483647, outgoingWindow: 2147483647,
-          handleMax: 4294967295
-        }),
-        new AttachFrameWithReceivedName(constants.linkRole.sender),
-        new frames.BeginFrame({
-          remoteChannel: 2, nextOutgoingId: 0,
-          incomingWindow: 2147483647, outgoingWindow: 2147483647,
-          handleMax: 4294967295
-        }),
-        [
-          new frames.BeginFrame({
-            remoteChannel: 3, nextOutgoingId: 0,
-            incomingWindow: 2147483647, outgoingWindow: 2147483647,
-            handleMax: 4294967295
-          }),
-          new frames.CloseFrame({
-            error: { condition: ErrorCondition.ConnectionForced, description: 'test' }
-          }),
-        ]
-      ]);
-
-      // Set up a new server to connect to on disconnect
-      test.client.once('disconnected', function() {
-        setImmediate(function() {
-          test.server.teardown();
-          test.server = new MockServer();
-          test.server.setup();
-          test.server.setResponseSequence([
-            constants.amqpVersion,
-            new frames.OpenFrame(test.client.policy.connect.options),
-            [
-              new frames.BeginFrame({
-                remoteChannel: 1, nextOutgoingId: 0,
-                incomingWindow: 2147483647, outgoingWindow: 2147483647,
-                handleMax: 4294967295
-              }),
-              new frames.BeginFrame({
-                remoteChannel: 2, nextOutgoingId: 0,
-                incomingWindow: 2147483647, outgoingWindow: 2147483647,
-                handleMax: 4294967295
-              }),
-              new frames.BeginFrame({
-                remoteChannel: 3, nextOutgoingId: 0,
-                incomingWindow: 2147483647, outgoingWindow: 2147483647,
-                handleMax: 4294967295
-              })
-            ]
-          ]);
-        });
-      });
-
-      test.client.connect(test.server.address())
-        .then(function() {
-          var clientSession;
-          var session1;
-          var session2;
-          return test.client.createReceiver('testing')
-            .then(function(link) {
-              clientSession = link.session;
-              return test.client.createSession();
-            })
-            .then(function(session) {
-              session1 = session;
-              return test.client.createSession();
-            })
-            .then(function(session) {
-              session2 = session;
-              return [clientSession, session1, session2];
-            });
-        })
-        .spread(function(clientSession, session1, session2) {
-          var mapped = { clientSession: 0, session1: 0, session2: 0 };
-
-          clientSession.once(Session.Mapped, function() {
-            mapped.clientSession++;
-          });
-
-          session1.once(Session.Mapped, function() {
-            mapped.session1++;
-          });
-
-          session2.once(Session.Mapped, function() {
-            mapped.session2++;
-          });
-
-          test.client.once('connected', function() {
-            expect(mapped.clientSession).to.equal(1);
-            expect(mapped.session1).to.equal(1);
-            expect(mapped.session2).to.equal(1);
-            done();
-          });
-        })
-        .catch(done);
     });
   });
 });

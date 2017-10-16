@@ -106,6 +106,13 @@ describe('Default Policy', function() {
       test.server.setResponseSequence([
         constants.amqpVersion,
         new frames.OpenFrame(policy.connect.options),
+        new frames.BeginFrame({
+          remoteChannel: 1,
+          nextOutgoingId: 0,
+          incomingWindow: 2147483647,
+          outgoingWindow: 2147483647,
+          handleMax: 4294967295
+        }),
         new frames.CloseFrame({
           error: { condition: ErrorCondition.ConnectionForced, description: 'test' }
         })
@@ -146,6 +153,13 @@ describe('Default Policy', function() {
         new frames.SaslOutcomeFrame({code: constants.saslOutcomes.ok}),
         constants.amqpVersion,
         new frames.OpenFrame(policy.connect.options),
+        new frames.BeginFrame({
+          remoteChannel: 1,
+          nextOutgoingId: 0,
+          incomingWindow: 2147483647,
+          outgoingWindow: 2147483647,
+          handleMax: 4294967295
+        }),
         new frames.CloseFrame({
           error: { condition: ErrorCondition.ConnectionForced, description: 'test' }
         })
@@ -175,6 +189,13 @@ describe('Default Policy', function() {
       test.server.setResponseSequence([
         constants.amqpVersion,
         new frames.OpenFrame(policy.connect.options),
+        new frames.BeginFrame({
+          remoteChannel: 1,
+          nextOutgoingId: 0,
+          incomingWindow: 2147483647,
+          outgoingWindow: 2147483647,
+          handleMax: 4294967295
+        }),
         new frames.CloseFrame({
           error: { condition: ErrorCondition.ConnectionForced, description: 'test' }
         })
